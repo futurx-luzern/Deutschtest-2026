@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meine Tests</title>
+  <link rel="stylesheet" href="css/tailwind.min.css" />
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+  <main class="max-w-4xl mx-auto bg-white shadow rounded-xl p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold text-gray-800">Meine Tests</h1>
+      <button id="logout" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">Logout</button>
+    </div>
+    <p id="who" class="text-gray-600 mb-6"></p>
+    <div id="cards" class="grid md:grid-cols-2 gap-4"></div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script>
+    const cfg = window.APP_CONFIG || {};
+    const supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+    const session = JSON.parse(localStorage.getItem('app_session') || 'null');
+    if (!session || session.role !== 'participant' || !session.session_token) window.location.href = 'index.html';
+
+    document.getElementById('who').textContent = `Teilnehmende-ID: ${session.pseudonym_id}`;
+    document.getElementById('logout').onclick = async () => {
+      try {
+        if (session?.session_token) await supabase.rpc('app_logout', { p_session_token: session.session_token });
+      } catch {}
+      localStorage.removeItem('app_session');
+      window.location.href = 'index.html';
+    };
+
+    const LABELS = {
+      deutsch: 'Einstufungstest Deutsch',
+      mathe: 'Einstufungstest Mathe',
+      daz: 'Einstufungstest DAZ'
+    };
+
+    async function loadAssignments() {
+      const { data, error } = await supabase
+        .rpc('participant_list_assignments', { p_session_token: session.session_token });
+
+      const cards = document.getElementById('cards');
+      cards.innerHTML = '';
+
+      if (error) {
+        cards.innerHTML = `<div class='text-red-600'>Fehler beim Laden: ${error.message}</div>`;
+        return;
+      }
+      if (!data || !data.length) {
+        cards.innerHTML = `<div class='text-gray-600'>Noch keine Tests zugewiesen.</div>`;
+        return;
+      }
+
+      for (const row of data) {
+        const div = document.createElement('article');
+        const disabled = row.locked ? 'disabled' : '';
+        const btnText = row.status === 'completed' ? 'Ansehen' : (row.status === 'in_progress' ? 'Fortsetzen' : 'Starten');
+        div.className = 'border rounded-lg p-4 bg-gray-50';
+        div.innerHTML = `
+          <h2 class='font-semibold text-lg mb-1'>${LABELS[row.test_key] || row.test_key}</h2>
+          <p class='text-sm text-gray-600 mb-1'>Status: ${row.status}</p>
+          <p class='text-sm text-gray-600 mb-2'>Fortschritt: ${row.progress_percent || 0}%</p>
+          <div class='w-full bg-gray-200 rounded-full h-2 mb-3'><div class='bg-indigo-500 h-2 rounded-full' style='width:${row.progress_percent || 0}%'></div></div>
+          <button ${disabled} data-id='${row.id}' class='open-test bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white rounded px-3 py-1'>${row.locked ? 'Gesperrt' : btnText}</button>
+        `;
+        cards.appendChild(div);
+      }
+
+      document.querySelectorAll('.open-test').forEach(btn => {
+        btn.addEventListener('click', () => {
+          window.location.href = `test.html?assignment=${encodeURIComponent(btn.dataset.id)}`;
+        });
+      });
+    }
+
+    loadAssignments();
+  </script>
+</body>
+</html>

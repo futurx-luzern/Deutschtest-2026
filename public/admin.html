@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin</title>
+  <link rel="stylesheet" href="css/tailwind.min.css" />
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+  <main class="max-w-6xl mx-auto bg-white rounded-xl shadow p-6">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">Admin</h1>
+      <button id="logout" class="px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">Logout</button>
+    </div>
+
+    <section class="mb-8 border rounded-lg p-4">
+      <h2 class="font-semibold text-lg mb-3">Teilnehmende erstellen</h2>
+      <form id="create-form" class="grid md:grid-cols-6 gap-3">
+        <input id="pseudonym_id" class="border rounded px-2 py-1 md:col-span-2" placeholder="Pseudonym-ID" required />
+        <input id="display_name" class="border rounded px-2 py-1 md:col-span-2" placeholder="Anzeige-Name (optional)" />
+        <input id="pin" class="border rounded px-2 py-1" placeholder="PIN" required />
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="autodelete" /> Auto-Delete</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="t_deutsch" checked /> Deutsch</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="t_mathe" /> Mathe</label>
+        <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="t_daz" /> DAZ</label>
+        <button class="bg-indigo-600 text-white rounded px-3 py-1 md:col-span-6 w-fit">Konto erstellen</button>
+      </form>
+      <p id="create-msg" class="text-sm mt-2"></p>
+    </section>
+
+    <section class="border rounded-lg p-4">
+      <div class="flex justify-between items-center mb-3">
+        <h2 class="font-semibold text-lg">Teilnehmende</h2>
+        <button id="reload" class="px-3 py-1 rounded bg-gray-200">Neu laden</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-collapse">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="border px-2 py-1 text-left">Pseudonym</th>
+              <th class="border px-2 py-1 text-left">Name</th>
+              <th class="border px-2 py-1 text-left">Erstellt</th>
+              <th class="border px-2 py-1 text-left">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script>
+    const cfg = window.APP_CONFIG || {};
+    const supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+    const session = JSON.parse(localStorage.getItem('app_session') || 'null');
+    if (!session || session.role !== 'admin' || !session.session_token) window.location.href = 'index.html';
+
+    document.getElementById('logout').onclick = async () => {
+      try {
+        if (session?.session_token) await supabase.rpc('app_logout', { p_session_token: session.session_token });
+      } catch {}
+      localStorage.removeItem('app_session');
+      window.location.href = 'index.html';
+    };
+
+    function setMsg(text, err=false) {
+      const el = document.getElementById('create-msg');
+      el.textContent = text;
+      el.className = `text-sm mt-2 ${err ? 'text-red-600' : 'text-green-700'}`;
+    }
+
+    function selectedTests() {
+      return [
+        document.getElementById('t_deutsch').checked ? 'deutsch' : null,
+        document.getElementById('t_mathe').checked ? 'mathe' : null,
+        document.getElementById('t_daz').checked ? 'daz' : null
+      ].filter(Boolean);
+    }
+
+    async function createParticipant(e) {
+      e.preventDefault();
+      const payload = {
+        p_session_token: session.session_token,
+        p_pseudonym_id: document.getElementById('pseudonym_id').value.trim(),
+        p_display_name: document.getElementById('display_name').value.trim() || null,
+        p_pin: document.getElementById('pin').value.trim(),
+        p_auto_delete_enabled: document.getElementById('autodelete').checked,
+        p_auto_delete_days: 90,
+        p_tests: selectedTests()
+      };
+
+      const { data, error } = await supabase.rpc('admin_create_participant', payload);
+      if (error || !data || !data.ok) {
+        setMsg(error?.message || data?.message || 'Erstellen fehlgeschlagen', true);
+        return;
+      }
+      setMsg('Konto erstellt.');
+      await loadParticipants();
+    }
+
+    async function loadParticipants() {
+      const { data, error } = await supabase.rpc('admin_list_participants', { p_session_token: session.session_token });
+      const tbody = document.getElementById('rows');
+      tbody.innerHTML = '';
+      if (error) {
+        tbody.innerHTML = `<tr><td class='border px-2 py-1 text-red-600' colspan='4'>${error.message}</td></tr>`;
+        return;
+      }
+      for (const p of data || []) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class='border px-2 py-1'>${p.pseudonym_id}</td>
+          <td class='border px-2 py-1'>${p.display_name || '-'}</td>
+          <td class='border px-2 py-1'>${new Date(p.created_at).toLocaleString('de-CH')}</td>
+          <td class='border px-2 py-1 space-x-2'>
+            <button data-id='${p.id}' class='pdf px-2 py-1 rounded bg-blue-600 text-white'>PDF</button>
+            <button data-id='${p.id}' class='toggle px-2 py-1 rounded bg-yellow-500 text-white'>Sperre/Freigabe</button>
+            <button data-id='${p.id}' class='delete px-2 py-1 rounded bg-red-600 text-white'>Löschen</button>
+            <button data-id='${p.id}' class='json px-2 py-1 rounded bg-indigo-600 text-white'>JSON</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+      bindRowActions();
+    }
+
+    async function generatePdf(participantId) {
+      const { data, error } = await supabase.rpc('admin_get_credentials_pdf_payload', {
+        p_session_token: session.session_token,
+        p_participant_id: participantId
+      });
+      if (error || !data || !data.ok) return alert(error?.message || data?.message || 'PDF-Datenfehler');
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      doc.setFontSize(16);
+      doc.text('Zugangsdaten', 14, 20);
+      doc.setFontSize(12);
+      doc.text(`Plattform-Link: ${data.payload.platform_link}`, 14, 35);
+      doc.text(`Benutzername: ${data.payload.username}`, 14, 45);
+      doc.text(`Passwort/PIN: ${data.payload.pin}`, 14, 55);
+      doc.text(`Tests: ${data.payload.test_names.join(', ')}`, 14, 65);
+      doc.save(`zugang_${data.payload.username}.pdf`);
+    }
+
+    async function toggleLock(participantId) {
+      const { error } = await supabase.rpc('admin_toggle_lock_for_participant', {
+        p_session_token: session.session_token,
+        p_participant_id: participantId
+      });
+      if (error) return alert(error.message);
+      loadParticipants();
+    }
+
+    async function removeParticipant(participantId) {
+      if (!confirm('Konto wirklich löschen?')) return;
+      const { error } = await supabase.rpc('admin_delete_participant', {
+        p_session_token: session.session_token,
+        p_participant_id: participantId
+      });
+      if (error) return alert(error.message);
+      loadParticipants();
+    }
+
+    async function downloadResults(participantId) {
+      const { data, error } = await supabase.rpc('admin_export_results_json', {
+        p_session_token: session.session_token,
+        p_participant_id: participantId
+      });
+      if (error || !data) return alert(error?.message || 'Export fehlgeschlagen');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `results_${participantId}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function bindRowActions() {
+      document.querySelectorAll('.pdf').forEach(btn => btn.onclick = () => generatePdf(btn.dataset.id));
+      document.querySelectorAll('.toggle').forEach(btn => btn.onclick = () => toggleLock(btn.dataset.id));
+      document.querySelectorAll('.delete').forEach(btn => btn.onclick = () => removeParticipant(btn.dataset.id));
+      document.querySelectorAll('.json').forEach(btn => btn.onclick = () => downloadResults(btn.dataset.id));
+    }
+
+    document.getElementById('create-form').addEventListener('submit', createParticipant);
+    document.getElementById('reload').addEventListener('click', loadParticipants);
+    loadParticipants();
+  </script>
+</body>
+</html>
