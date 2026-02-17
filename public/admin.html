@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin-Dashboard</title>
+  <link rel="stylesheet" href="css/tailwind.min.css" />
+  <style>
+    body {
+      background:
+        radial-gradient(1400px 760px at -5% -10%, rgba(196, 181, 253, 0.42), transparent 60%),
+        radial-gradient(1200px 760px at 105% -10%, rgba(147, 197, 253, 0.36), transparent 60%),
+        linear-gradient(135deg, #eef2ff 0%, #ede9fe 42%, #dbeafe 100%);
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid rgba(255, 255, 255, 0.52);
+      box-shadow: 0 18px 40px rgba(79, 70, 229, 0.12);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+    .glass-strong {
+      background: rgba(255, 255, 255, 0.75);
+      border: 1px solid rgba(255, 255, 255, 0.58);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+  </style>
+</head>
+<body class="min-h-screen p-4 md:p-8 text-slate-800">
+  <main class="max-w-7xl mx-auto space-y-6">
+    <section class="glass rounded-3xl p-6">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 class="text-2xl md:text-3xl font-bold text-slate-900">Admin-Dashboard</h1>
+          <p class="text-slate-600">Teilnehmende verwalten, Teststatus überwachen und Ergebnisse exportieren.</p>
+        </div>
+        <div class="flex gap-2">
+          <button id="reload-all" class="px-4 py-2 rounded-xl glass-strong hover:bg-white/90 transition text-slate-800 font-medium">Aktualisieren</button>
+          <button id="logout" class="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white font-medium shadow">Logout</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid md:grid-cols-4 gap-4" id="stats-grid">
+      <article class="glass rounded-2xl p-4">
+        <p class="text-slate-500 text-sm">Teilnehmende</p>
+        <p id="stat-participants" class="text-2xl font-bold text-slate-900">0</p>
+      </article>
+      <article class="glass rounded-2xl p-4">
+        <p class="text-slate-500 text-sm">Laufende Tests</p>
+        <p id="stat-running" class="text-2xl font-bold text-indigo-700">0</p>
+      </article>
+      <article class="glass rounded-2xl p-4">
+        <p class="text-slate-500 text-sm">Gesperrt</p>
+        <p id="stat-locked" class="text-2xl font-bold text-amber-600">0</p>
+      </article>
+      <article class="glass rounded-2xl p-4">
+        <p class="text-slate-500 text-sm">Abgeschlossen</p>
+        <p id="stat-completed" class="text-2xl font-bold text-emerald-700">0</p>
+      </article>
+    </section>
+
+    <section class="glass rounded-3xl p-6">
+      <h2 class="text-xl font-semibold text-slate-900 mb-4">Teilnehmende anlegen</h2>
+      <form id="create-form" class="grid md:grid-cols-12 gap-3">
+        <input id="first_name" class="border border-white/60 rounded-xl px-3 py-2 md:col-span-3 bg-white/80" placeholder="Vorname" required />
+        <input id="last_name" class="border border-white/60 rounded-xl px-3 py-2 md:col-span-3 bg-white/80" placeholder="Nachname" required />
+        <input id="pseudonym_id" class="border border-white/60 rounded-xl px-3 py-2 md:col-span-2 bg-white/80" placeholder="Benutzername" required />
+        <input id="pin" class="border border-white/60 rounded-xl px-3 py-2 md:col-span-2 bg-white/80" placeholder="PIN" required />
+        <label class="flex items-center gap-2 text-sm md:col-span-2"><input type="checkbox" id="autodelete" /> Auto-Delete (90 Tage)</label>
+
+        <div class="md:col-span-12 flex flex-wrap items-center gap-4 text-sm">
+          <label class="flex items-center gap-2"><input type="checkbox" id="t_deutsch" checked /> Deutsch</label>
+          <label class="flex items-center gap-2"><input type="checkbox" id="t_mathe" /> Mathe</label>
+          <label class="flex items-center gap-2"><input type="checkbox" id="t_daz" /> DAZ</label>
+          <button class="ml-auto bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white rounded-xl px-4 py-2 font-medium shadow">Konto erstellen</button>
+        </div>
+      </form>
+      <p id="create-msg" class="text-sm mt-3"></p>
+    </section>
+
+    <section class="glass rounded-3xl p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold text-slate-900">Teilnehmende</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-separate border-spacing-0">
+          <thead>
+            <tr class="bg-white/75 text-slate-700">
+              <th class="border px-3 py-2 text-left">Benutzername</th>
+              <th class="border px-3 py-2 text-left">Name</th>
+              <th class="border px-3 py-2 text-left">Erstellt</th>
+              <th class="border px-3 py-2 text-left">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="participants-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="glass rounded-3xl p-6">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-xl font-semibold text-slate-900">Test-Monitoring</h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm border-separate border-spacing-0">
+          <thead>
+            <tr class="bg-white/75 text-slate-700">
+              <th class="border px-3 py-2 text-left">Name</th>
+              <th class="border px-3 py-2 text-left">Test</th>
+              <th class="border px-3 py-2 text-left">Status</th>
+              <th class="border px-3 py-2 text-left">Fortschritt</th>
+              <th class="border px-3 py-2 text-left">Aktive Zeit</th>
+              <th class="border px-3 py-2 text-left">Letzte Aktivität</th>
+              <th class="border px-3 py-2 text-left">Aktionen</th>
+            </tr>
+          </thead>
+          <tbody id="overview-rows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="js/supabase-config.js"></script>
+  <script>
+    const cfg = window.APP_CONFIG || {};
+    const supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+
+    const session = JSON.parse(localStorage.getItem('app_session') || 'null');
+    if (!session || session.role !== 'admin' || !session.session_token) window.location.href = 'admin-login.html';
+
+    const TEST_LABELS = {
+      deutsch: 'Einstufungstest Deutsch',
+      mathe: 'Einstufungstest Mathe',
+      daz: 'Einstufungstest DAZ'
+    };
+
+    const state = {
+      participants: [],
+      assignments: []
+    };
+
+    function setMsg(text, err = false) {
+      const el = document.getElementById('create-msg');
+      el.textContent = text;
+      el.className = `text-sm mt-3 ${err ? 'text-red-600' : 'text-green-700'}`;
+    }
+
+    function selectedTests() {
+      return [
+        document.getElementById('t_deutsch').checked ? 'deutsch' : null,
+        document.getElementById('t_mathe').checked ? 'mathe' : null,
+        document.getElementById('t_daz').checked ? 'daz' : null
+      ].filter(Boolean);
+    }
+
+    function formatDate(value) {
+      if (!value) return '-';
+      return new Date(value).toLocaleString('de-CH');
+    }
+
+    function formatDuration(ms) {
+      if (typeof ms !== 'number' || ms < 0) return '-';
+      const s = Math.floor(ms / 1000);
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60).toString().padStart(2, '0');
+      const sec = (s % 60).toString().padStart(2, '0');
+      return `${h}:${m}:${sec}`;
+    }
+
+    function statusLabel(row) {
+      if (row.locked) return 'gesperrt';
+      return row.status || 'not_started';
+    }
+
+    function renderStats() {
+      document.getElementById('stat-participants').textContent = String(state.participants.length);
+      document.getElementById('stat-running').textContent = String(state.assignments.filter(x => x.status === 'in_progress' && !x.locked).length);
+      document.getElementById('stat-locked').textContent = String(state.assignments.filter(x => x.locked).length);
+      document.getElementById('stat-completed').textContent = String(state.assignments.filter(x => x.status === 'completed').length);
+    }
+
+    function renderParticipants() {
+      const tbody = document.getElementById('participants-rows');
+      tbody.innerHTML = '';
+      if (!state.participants.length) {
+        tbody.innerHTML = `<tr><td class='border border-white/70 px-3 py-2 text-slate-500' colspan='4'>Keine Teilnehmenden vorhanden.</td></tr>`;
+        return;
+      }
+
+      for (const p of state.participants) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class='border border-white/70 px-3 py-2'>${p.pseudonym_id}</td>
+          <td class='border border-white/70 px-3 py-2'>${p.display_name || '-'}</td>
+          <td class='border border-white/70 px-3 py-2'>${formatDate(p.created_at)}</td>
+          <td class='border px-3 py-2 space-x-2'>
+            <button data-id='${p.id}' class='pdf px-2 py-1 rounded bg-blue-600 text-white'>PDF</button>
+            <button data-id='${p.id}' class='delete px-2 py-1 rounded bg-red-600 text-white'>Löschen</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      document.querySelectorAll('.pdf').forEach(btn => btn.onclick = () => generatePdf(btn.dataset.id));
+      document.querySelectorAll('.delete').forEach(btn => btn.onclick = () => removeParticipant(btn.dataset.id));
+    }
+
+    function renderOverview() {
+      const tbody = document.getElementById('overview-rows');
+      tbody.innerHTML = '';
+      if (!state.assignments.length) {
+        tbody.innerHTML = `<tr><td class='border border-white/70 px-3 py-2 text-slate-500' colspan='7'>Noch keine Testzuweisungen vorhanden.</td></tr>`;
+        return;
+      }
+
+      for (const row of state.assignments) {
+        const canUnlock = row.locked ? '' : 'disabled';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class='border border-white/70 px-3 py-2'>${row.display_name || row.pseudonym_id}</td>
+          <td class='border border-white/70 px-3 py-2'>${TEST_LABELS[row.test_key] || row.test_key}</td>
+          <td class='border border-white/70 px-3 py-2'>${statusLabel(row)}</td>
+          <td class='border border-white/70 px-3 py-2'>${row.progress_percent || 0}%</td>
+          <td class='border border-white/70 px-3 py-2'>${formatDuration(row.total_active_time_ms)}</td>
+          <td class='border border-white/70 px-3 py-2'>${formatDate(row.last_activity_at)}</td>
+          <td class='border px-3 py-2 space-x-2'>
+            <button data-id='${row.assignment_id}' class='unlock px-2 py-1 rounded bg-amber-600 disabled:bg-slate-300 text-white' ${canUnlock}>Freigeben</button>
+            <button data-id='${row.assignment_id}' class='json px-2 py-1 rounded bg-indigo-600 text-white'>JSON</button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      document.querySelectorAll('.unlock').forEach(btn => btn.onclick = () => unlockAssignment(btn.dataset.id));
+      document.querySelectorAll('.json').forEach(btn => btn.onclick = () => downloadAssignmentJson(btn.dataset.id));
+    }
+
+    async function createParticipant(e) {
+      e.preventDefault();
+      const tests = selectedTests();
+      if (!tests.length) {
+        setMsg('Bitte mindestens einen Test auswählen.', true);
+        return;
+      }
+
+      const firstName = document.getElementById('first_name').value.trim();
+      const lastName = document.getElementById('last_name').value.trim();
+      const payload = {
+        p_session_token: session.session_token,
+        p_pseudonym_id: document.getElementById('pseudonym_id').value.trim(),
+        p_display_name: `${firstName} ${lastName}`.trim(),
+        p_pin: document.getElementById('pin').value.trim(),
+        p_auto_delete_enabled: document.getElementById('autodelete').checked,
+        p_auto_delete_days: 90,
+        p_tests: tests
+      };
+
+      const { data, error } = await supabase.rpc('admin_create_participant', payload);
+      if (error || !data?.ok) {
+        setMsg(error?.message || data?.message || 'Erstellen fehlgeschlagen', true);
+        return;
+      }
+
+      document.getElementById('create-form').reset();
+      document.getElementById('t_deutsch').checked = true;
+      setMsg('Konto erstellt.');
+      await reloadAll();
+    }
+
+    async function loadParticipants() {
+      const { data, error } = await supabase.rpc('admin_list_participants', { p_session_token: session.session_token });
+      if (error) throw error;
+      state.participants = data || [];
+    }
+
+    async function loadOverview() {
+      const { data, error } = await supabase.rpc('admin_list_assignments_overview', { p_session_token: session.session_token });
+      if (error) throw error;
+      state.assignments = data || [];
+    }
+
+    async function generatePdf(participantId) {
+      const { data, error } = await supabase.rpc('admin_get_credentials_pdf_payload', {
+        p_session_token: session.session_token,
+        p_participant_id: participantId
+      });
+      if (error || !data?.ok) return alert(error?.message || data?.message || 'PDF-Datenfehler');
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(18);
+      doc.text('Zugangsdaten', 20, 25);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(12);
+      doc.text(`Plattform-Link: ${data.payload.platform_link}`, 20, 45);
+      doc.text(`Benutzername: ${data.payload.username}`, 20, 55);
+      doc.text(`PIN: ${data.payload.pin}`, 20, 65);
+      doc.text(`Tests: ${data.payload.test_names.join(', ')}`, 20, 75);
+      doc.save(`zugang_${data.payload.username}.pdf`);
+    }
+
+    async function unlockAssignment(assignmentId) {
+      const { error } = await supabase.rpc('admin_unlock_assignment', {
+        p_session_token: session.session_token,
+        p_assignment_id: assignmentId
+      });
+      if (error) return alert(error.message);
+      await reloadAll();
+    }
+
+    async function removeParticipant(participantId) {
+      if (!confirm('Konto wirklich löschen?')) return;
+      const { error } = await supabase.rpc('admin_delete_participant', {
+        p_session_token: session.session_token,
+        p_participant_id: participantId
+      });
+      if (error) return alert(error.message);
+      await reloadAll();
+    }
+
+    async function downloadAssignmentJson(assignmentId) {
+      const { data, error } = await supabase.rpc('admin_export_assignment_json', {
+        p_session_token: session.session_token,
+        p_assignment_id: assignmentId
+      });
+      if (error || !data?.ok) return alert(error?.message || data?.message || 'Export fehlgeschlagen');
+
+      const testName = data.payload?.assignment?.test_key || 'test';
+      const userName = data.payload?.participant?.pseudonym_id || 'teilnehmer';
+      const dateString = new Date().toISOString().slice(0, 10);
+      const fileName = `${testName}_${userName}_${dateString}.json`;
+
+      const blob = new Blob([JSON.stringify(data.payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function reloadAll() {
+      try {
+        await Promise.all([loadParticipants(), loadOverview()]);
+        renderParticipants();
+        renderOverview();
+        renderStats();
+      } catch (e) {
+        console.error(e);
+        alert(`Fehler beim Laden: ${e.message || e}`);
+      }
+    }
+
+    document.getElementById('logout').onclick = async () => {
+      try {
+        if (session?.session_token) await supabase.rpc('app_logout', { p_session_token: session.session_token });
+      } catch {}
+      localStorage.removeItem('app_session');
+      window.location.href = 'admin-login.html';
+    };
+
+    document.getElementById('create-form').addEventListener('submit', createParticipant);
+    document.getElementById('reload-all').addEventListener('click', reloadAll);
+    reloadAll();
+  </script>
+</body>
+</html>

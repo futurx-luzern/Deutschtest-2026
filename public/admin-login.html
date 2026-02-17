@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin-Login</title>
+  <link rel="stylesheet" href="css/tailwind.min.css" />
+  <style>
+    body {
+      background:
+        radial-gradient(1200px 700px at 10% -10%, rgba(196, 181, 253, 0.45), transparent 60%),
+        radial-gradient(1000px 650px at 100% 0%, rgba(147, 197, 253, 0.4), transparent 60%),
+        linear-gradient(135deg, #eef2ff 0%, #e0e7ff 45%, #dbeafe 100%);
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.45);
+      box-shadow: 0 20px 45px rgba(79, 70, 229, 0.16);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <main class="w-full max-w-md glass-card rounded-3xl p-8">
+    <h1 class="text-2xl font-bold text-slate-900 mb-2">Admin-Bereich</h1>
+    <p class="text-slate-600 mb-6">Login für Lehrpersonen und Administration.</p>
+
+    <form id="admin-login-form" class="space-y-4">
+      <div>
+        <label for="admin-username" class="block text-sm font-medium text-slate-700 mb-1">Benutzername</label>
+        <input id="admin-username" value="Admin" class="w-full border border-white/60 rounded-xl px-3 py-2 bg-white/75 focus:outline-none focus:ring-2 focus:ring-indigo-300" required />
+      </div>
+      <div>
+        <label for="admin-password" class="block text-sm font-medium text-slate-700 mb-1">Passwort</label>
+        <input id="admin-password" type="password" class="w-full border border-white/60 rounded-xl px-3 py-2 bg-white/75 focus:outline-none focus:ring-2 focus:ring-indigo-300" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="w-full bg-gradient-to-r from-indigo-500 to-blue-500 hover:from-indigo-600 hover:to-blue-600 text-white font-semibold py-2 rounded-xl shadow">Admin einloggen</button>
+    </form>
+
+    <p id="admin-msg" class="mt-4 text-sm"></p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase-config.js"></script>
+  <script>
+    const cfg = window.APP_CONFIG || {};
+    const supabase = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    const msg = document.getElementById('admin-msg');
+
+    function setMsg(text, err = false) {
+      msg.textContent = text;
+      msg.className = `mt-4 text-sm ${err ? 'text-red-600' : 'text-green-700'}`;
+    }
+
+    const existing = JSON.parse(localStorage.getItem('app_session') || 'null');
+    if (existing?.role === 'admin' && existing?.session_token) {
+      window.location.href = 'admin.html';
+    }
+
+    document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('admin-username').value.trim();
+      const password = document.getElementById('admin-password').value.trim();
+
+      setMsg('Login wird geprüft...');
+      const { data, error } = await supabase.rpc('app_login', { p_username: username, p_pin: password });
+
+      if (error || !data?.ok || data?.role !== 'admin') {
+        setMsg(error?.message || data?.message || 'Admin-Login fehlgeschlagen.', true);
+        return;
+      }
+
+      localStorage.setItem('app_session', JSON.stringify(data));
+      window.location.href = 'admin.html';
+    });
+  </script>
+</body>
+</html>
